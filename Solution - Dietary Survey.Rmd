@@ -1,0 +1,78 @@
+---
+title: "Problem 3: Dietary Survey"
+author: "Rakesh Vishwabrahmana"
+output:
+  word_document: default
+  html_document: default
+---
+
+## Question 1
+
+### Solution:
+
+```{r}
+diet <- read.csv("calories.csv", header = TRUE)
+daily_diet <- colMeans(diet)
+# Combined mean
+x_bar <- mean(daily_diet)
+n_sam <- dim(diet)[1]
+week <- dim(diet)[2]
+# polled SD
+SD <- sqrt((n_sam-1)*sum(apply(diet, 2, var))/(week*n_sam-week))
+SE <- SD / sqrt(n_sam)
+t<-qt((1-0.05/2),df=n_sam-1)
+up_CI <- x_bar + t * SE 
+low_CI <- x_bar - t * SE 
+data.frame(x_bar, SD, SE, low_CI, up_CI)
+```
+The average daily energy consumption for all individuals in Britain is `r round(x_bar)` and the 95% CI is (`r paste(round(low_CI), round(up_CI), sep = " , ")`).
+
+## Question 2
+
+### Solution:
+Suppose that the estimated average daily energy consumption is $\bar{x}$ and we want a 95% confidence interval of ($\bar{x}-20 , \bar{x}+20$) for the population average $\mu$. This can be calculated from slandered error formula as follows:
+$$
+\begin{aligned}
+n &> \left(\frac{sd}{SE}\right)^2 \\
+&> \left(\frac{sd}{|X_{CL}-\mu|/t_{crit}}\right)^2 \\
+&> \left(\frac{sd \times t_{crit}}{|X_{CL}-\mu|}\right)^2
+\end{aligned}
+$$
+```{r}
+#  CI = [x_bar-20, x_bar+20]
+t_crit <- round(qt((1 - 0.05/2),df=n_sam-1))
+SE_est <- 20/ t_crit  
+n_est <- round((SD/SE_est)^2)
+```
+Therefore, require sample size is `r n_est`. 
+
+## Question 3
+
+### Solution:
+Since we have sample mean, we can estimate total daily food consumption by all individuals in the United Kingdom from the following formula:
+$$Y=N\bar{x}$$
+and the standard error of population total is calculated from the formula:
+$$SE = \sqrt {\left( N^2 \times (1 - n/N) \times s^2 / n \right)}$$.
+Given that the UK population is approximately 67 million, i.e., $N=67000000$.
+```{r}
+N <- 67000000
+total_diet <- N * x_bar
+SE_total <- sqrt(N^2*(1-n_sam/N)* SD^2/n_sam)
+up_CI.total <- total_diet + t * SE_total 
+low_CI.total <- total_diet - t * SE_total 
+```
+Therefore, the estimated total daily food consumption by all individuals in the United Kingdom is `r round(total_diet)` and the 95% CI is (`r paste(round(low_CI.total), round(up_CI.total), sep = " , ")`).
+
+## Question 4
+
+### Solution:
+Given that the estimated total energy value of all food produced/imported for human consumption in the UK is $84\times 10^{12}$ kcal per year. Using the given sample the estimated daily total energy consumption in the UK is `r round(total_diet)` and `r round(365*total_diet)` yearly. 
+```{r}
+waste_prop<- (84*10^12 - 365*total_diet)/ (84*10^12)
+s2 <- n_sam/(n_sam-1)* waste_prop * (1-waste_prop)
+SE_prop<- sqrt(s2/n_sam)
+up_CI.prop <-  waste_prop + t * SE_prop 
+low_CI.prop <- waste_prop - t * SE_prop 
+```
+The percentage of wasted food is `r round(waste_prop*100)`% and the 95% CI is (`r paste(paste(round(low_CI.prop*100), "%", sep = ""), paste(round(up_CI.prop*100),"%", sep = ""),sep =" , ")`).
+
