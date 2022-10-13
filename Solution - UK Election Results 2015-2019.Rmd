@@ -1,0 +1,263 @@
+---
+title: 'Problem 8: UK Election Results, 2015-2019'
+author: "Rakesh Vishwabrahmana"
+output:
+  word_document: default
+  html_document: default
+---
+
+
+```{r}
+# Require Packages
+library(tidyverse)
+library(GGally)
+library(ggfortify)
+library(plyr)
+library(olsrr)
+library(car)
+```
+
+## Question: 1
+
+### Solution:
+
+### (a)
+In the following r chunk, we load all relevant CSV files into R data frame variables and convert string variable as factor.
+```{r}
+GE2015 <- read_csv("GE2015-results.csv")
+GE2015 <- GE2015%>%
+  mutate_if(is.character,as.factor) 
+
+GE2017 <- read_csv("GE2017-results.csv")
+GE2017 <- GE2017%>%
+  mutate_if(is.character,as.factor) 
+
+GE2019 <- read_csv("GE2019-results.csv")
+GE2019 <- GE2019 %>%
+  mutate_if(is.character,as.factor) 
+
+demographics <- read_csv("demographics.csv")
+demographics <- demographics %>%
+  mutate_if(is.character,as.factor) 
+```
+
+### (b)
+We add an extra categorical column **year** using the year of the election 2015, 2017 and 2019 to each results data frame .
+```{r}
+GE2015 <- GE2015 %>% 
+  mutate(year= "2015")
+GE2017 <- GE2017 %>% 
+  mutate(year= "2017")
+GE2019 <- GE2019 %>% 
+  mutate(year= "2019")
+```
+
+### (c)
+We will merge all the three separate year-specific results data frames into a single data frame containing all results in the following chunk.
+```{r}
+mrg_data <- plyr::rbind.fill(GE2015, GE2017, GE2019)
+dim(mrg_data)
+```
+
+### (d)
+In the given chunk below we merge the combined results data frame together with the demographics data to produce a single data frame.
+```{r}
+full_data<-left_join(mrg_data ,demographics,by = "ons_id" ,copy=TRUE)
+```
+
+### (e)
+we calculate the conservative vote share, then apply a logit transform to this value and create a new column named **con_share** of the data frame.
+```{r}
+full_data <- full_data %>%
+  mutate(con_share  = car::logit(con/valid_votes))
+```
+
+### (f)
+We select only relevant columns for the modeling purpose which will contain response and explanatory variable and define the object as final data frame.
+```{r}
+new_data <-full_data %>%
+  select(c(year,country_name, income, age.0.15, age.65.over,
+           foreignborn,employment,outofwork, white,commute.car, 
+           commute.bike, health.good,health.bad, con_share))
+```
+
+### (g)
+We will filter out rows associated with *Northern Ireland* constituencies from the data set.
+```{r}
+mod_data <- new_data %>%
+  filter(country_name != "Northern Ireland") %>%
+  mutate_if(is.character,as.factor) %>% 
+  drop_na()
+  
+dim(mod_data)
+```
+
+### (h)
+In the following chunk, we will use base function `summary()` to summarize variables in our final data frame. 
+```{r}
+summary(mod_data)
+```
+
+## Question: 2
+
+### Solution:
+The following R chunk below we will create a data frame with all the numeric variables and visualize there relationship using a pair matrix plot.
+```{r}
+num_data <- mod_data %>% 
+  select_if(is.numeric)
+  
+ggpairs(num_data,upper = list(continuous = wrap("cor", size = 2.5))) +
+theme(axis.text.x = element_text(angle = 90, hjust = 1))
+``` 
+
+## Question: 3
+
+### Solution:
+
+In the given chunk below we will give a table which will show whether the relationship with the response variable is positively correlated (+), not significantly correlated (o), or negatively correlated (-).
+```{r}
+pos <- c("income", "age.65.over", "employment", "white", "commute.car", "health.good")
+nsig <- rep(NA, 6)
+neg <- c("age.0.15","foreignborn", "outofwork", "commute.bike", "health.bad", NA)
+cor_tab <- data.frame(pos, nsig, neg)
+names(cor_tab)<- c("+","o","-")
+cor_tab
+```
+
+## Question: 4
+
+### Solution:
+In the following chunk below we will find the association between the response and categorical variables and find the group that predicts the highest and lowest value of the response variable.
+```{r}
+cat_data <- mod_data %>% 
+  select(con_share,year,country_name) 
+mod1 <- aov(con_share~ year+country_name, data = cat_data)
+summary(mod1)
+cat_data%>% 
+  group_by(year) %>% 
+  summarise(ave_con_share=mean(con_share)) 
+cat_data%>% 
+  group_by(country_name) %>% 
+  summarise(ave_con_share=mean(con_share))
+data.frame(Highest = c("2019","England"), lowest=c("2015","Scotland"))
+```
+
+## Question: 5
+
+### Solution:
+```{r}
+# (a)
+null_mod <- lm(con_share~1,data=mod_data)
+# (b)
+full_mod <- lm(con_share~.,data=mod_data)
+# (c)
+int.year_mod <- lm(con_share~.+year*.,data=mod_data)
+# (d)
+int.all_mod <- lm(con_share~.*.,data=mod_data)
+# (e)
+step_c <- step(int.year_mod, trace=0)
+# (f)
+step_d <- step(int.all_mod, trace=0)
+```
+
+## Question: 6
+
+### Solution:
+
+### (a) Degrees of error freedom
+```{r}
+df_e <- c(null_mod$df.residual,
+          full_mod$df.residual,
+          int.year_mod$df.residual,
+          int.all_mod$df.residual,
+          step_c$df.residual,
+          step_d$df.residual)
+```
+
+### (b) Degrees of model freedom
+```{r}
+N <- dim(mod_data)[1]
+df_mod <- c(N - null_mod$df.residual,
+            N - full_mod$df.residual,
+            N - int.year_mod$df.residual,
+            N - int.all_mod$df.residual,
+            N - step_c$df.residual,
+            N - step_d$df.residual)
+```
+
+### (c) Multiple R-squared
+```{r}
+r2 <- c(summary(null_mod)$r.squared,
+        summary(full_mod)$r.squared,
+        summary(int.year_mod)$r.squared,
+        summary(int.all_mod)$r.squared,
+        summary(step_c)$r.squared,
+        summary(step_d)$r.squared)
+```
+
+### (d) Adjusted R-squared
+```{r}
+adj_r2 <- c(summary(null_mod)$adj.r.squared,
+            summary(full_mod)$adj.r.squared,
+            summary(int.year_mod)$adj.r.squared,
+            summary(int.all_mod)$adj.r.squared,
+            summary(step_c)$adj.r.squared,
+            summary(step_d)$adj.r.squared)
+```
+
+### (e) Residual standard error
+```{r}
+se_e <- c(summary(null_mod)$sigma,
+          summary(full_mod)$sigma,
+          summary(int.year_mod)$sigma,
+          summary(int.all_mod)$sigma,
+          summary(step_c)$sigma,
+          summary(step_d)$sigma)
+```
+
+### (f) Akaike information criterion
+```{r}
+aic <- c(AIC(null_mod),
+         AIC(full_mod),
+         AIC(int.year_mod),
+         AIC(int.all_mod),
+         AIC(step_c),
+         AIC(step_d))
+```
+
+### (h) PRESS
+```{r}
+press <- c(olsrr::ols_press(null_mod),
+           olsrr::ols_press(full_mod),
+           olsrr::ols_press(int.year_mod),
+           olsrr::ols_press(int.all_mod),
+           olsrr::ols_press(step_c),
+           olsrr::ols_press(step_d)) 
+```
+
+```{r}
+data.frame(df_e, df_mod, r2, adj_r2, se_e, aic, press)
+```
+
+## Question: 7
+
+### Solution:
+From the above table we observed that the *step_d* might be the best model depending on the model metrics. However, the full model also perform well to explain the variation of Conservative vote share. The model with interaction can improve a bit to explain the variation of Conservative vote share.  
+
+## Question: 8
+
+### Solution:
+
+```{r}
+autoplot(step_d)
+```
+From the above diagnostic plot, we observed that the residual are approximately normally distributed but three observations are clearly outlier.   
+
+## Question: 9
+
+### Solution:
+```{r}
+summary(step_d)$coefficients[c("country_nameScotland","foreignborn","country_nameScotland:health.bad"), ]
+```
+The variables country_name, foreignborn , and the interaction country_name with health.bad are highly significant to reduce the variance in the "best" model. The proportion of vote in Scotland is very much less than the England. For *foreignborn*, we observed same scenarios like Scotland. Nevertheless, the interaction between Scotland and health.bad have positive association with proportion of vote, i.e, the residence in Scotland with poor health condition are likely to give their vote Conservative party.
+

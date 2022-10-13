@@ -1,0 +1,58 @@
+---
+title: 'Problem 10: X-ray Flares'
+author: "Rakesh Vishwabrahmana"
+output:
+  word_document: default
+  html_document: default
+---
+
+## Question 1
+
+### Solution:
+
+```{r}
+set.seed(105)
+s <-  rweibull(6,5,1)
+low_ci <- mean(s)-1.96*(sd(s)/sqrt(6))
+up_ci <- mean(s)+1.96*(sd(s)/sqrt(6))
+ci <- c(low_ci, up_ci)
+ci
+```
+The estimated value of S is `r mean(s)` and provide a 95% frequentist confidence intervalis `r ci`. 
+
+## Question 2
+
+### Solution:
+the likelihood function L(S; n) for this scenario can be written as 
+$$L(S;n)=\prod nS^{n-1}\exp(-S^n)$$.
+```{r}
+x <- s
+shape = seq(0.01,10,0.001)
+jointL = rep(1.0, length(shape)) 
+for (i in 1:length(x)) jointL = jointL * dweibull(x[i], shape, 1)
+plot(shape, jointL, type='l', xlim=c(0,10), ylab='Joint likelihood')
+abline(v=6, col =2, lty = 2)
+```
+
+## Question 3
+
+### Solution:
+ The the maximum-likelihood value of S is aproximately 0.25 when n=6.
+ 
+## Question 4
+
+### Solution:
+```{r}
+posterior = jointL / sum(jointL*0.001) 
+
+for (P in seq(0.0,max(posterior),0.001)) {
+probenclosed = sum(posterior[posterior > P]*0.001)
+ if (probenclosed < 0.95) break
+ } 
+CI = range(shape[posterior > P]) 
+plot(shape, posterior, type='l', xlim=c(0,10))
+abline(v=CI[1], col='red') 
+abline(v=CI[2], col='red') 
+abline(h=P, col='blue')
+```
+An approximate 95% credible interval on S is `r CI`.

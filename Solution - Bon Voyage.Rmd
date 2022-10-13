@@ -1,0 +1,113 @@
+---
+title: 'Problem 9: Bon Voyage'
+author: "Rakesh Vishwabrahmana"
+output:
+  html_document: default
+  word_document: default
+---
+
+
+## Question 1
+
+### Solution:
+We want to test that the frequency at which different price points were offered to travellers was consistent among all four destinations. Therefore, the hypotheses are:
+    $H_0=$ There is no strong association between price
+points and four destinations. i.e., add-on price was consistent.
+vs
+    $H_1=$ There is an association. 
+```{r}
+library(tidyverse)
+travel <- read.csv("travel.csv")
+travel <- travel %>% 
+  mutate(price = as.factor(price))
+tab1 <- with(travel,table(destination,price))
+tab1
+test1 <- chisq.test(tab1)
+test1
+```
+The p-value of the test is `r test1$p.value` which is not significant at 5% level of significance. Therefore we conclude that the frequency at which different price points were offered to travelers was consistent among all four destinations.
+
+## Question 2
+
+### Solution:
+We want to test that that the price offered to travelers is related
+to the frequency at which they accept the add-on. Therefore, the hypotheses are:
+    $H_0=$ There is no strong association between offered price and acceptation.
+vs
+    $H_1=$ There is an association. 
+```{r}
+tab2 <- with(travel,table(price, purchased))
+tab2
+test2 <- chisq.test(tab2)
+test2
+```
+The p-value of the test is `r test2$p.value` which is significant at 5% level of significance. Therefore we conclude that the price offered to travelers is related to the frequency at which they accept the add-on.
+
+## Question 3
+
+### Solution:
+In the given chunk below we will count the frequency as well as the proportion of travelers accepting the offer by price-point for all destinations and depict the result using a barplot with error bar. 
+```{r}
+dat <- travel %>%
+  filter(purchased == "Y") %>%
+  count(price) %>%
+  mutate(percent = n / sum(n),
+         error = sqrt((percent * (1-percent))/n)) %>% 
+  mutate(up_ci = percent+1.96*error, lw_ci = percent-1.96*error)
+
+ggplot(dat, aes(price, percent)) + 
+    geom_col(position = "dodge") +
+    geom_errorbar(aes(ymin = lw_ci, ymax = up_ci),
+                  position = position_dodge(0.9))
+```
+
+
+## Question 4
+
+### Solution:
+In the given chunk below we will calculate the average add-on revenue generated per traveler by price-point for all destinations and depict the result using a barplot with error bar.
+```{r}
+dat2 <- travel %>%
+  filter(purchased == "Y") %>%
+  mutate(price_5 = ifelse(price ==5,5,0),
+         price_10 = ifelse(price ==10,10,0),
+         price_20 = ifelse(price ==20,20,0)) %>% 
+  select(price_5, price_10,price_20) 
+
+dat2 <- data.frame(price=as.factor(unique(travel$price)),
+                   ave = apply(dat2,2,mean), 
+                   SD = apply(dat2,2,sd), 
+                   n = dim(dat2)[1]) %>%
+  mutate(up_ci = ave + 1.96 * SD/sqrt(n), lw_ci = ave-1.96* SD/sqrt(n))
+
+ggplot(dat2, aes(price, ave)) + 
+    geom_col(position = "dodge") +
+    geom_errorbar(aes(ymin = lw_ci, ymax = up_ci),
+                  position = position_dodge(0.9))
+```
+
+## Question 5
+
+### Solution:
+From the above analysis, it is observed that the maximum average add-on revenue found at price point **10**. Based on the sample data we have it is imitate that the add-on price of **10** is the optimum choice. However, we also observed that the upper error bar of add-on price of **5** crosses the lower error bar of add-on price of **10**. Therefore, there is a chance to make add-on revenue at price of **5**. 
+
+## Question 6
+
+### Solution:
+We can check the mean and variance of the offered price to check whether there is an over dispersion present or not.
+```{r}
+travel <- travel %>%
+  mutate(price = as.numeric(as.character(price)))
+mean(travel$price)
+var(travel$price)
+```
+From the output of the above chunk, we observed that the variance much higher than the mean. Now we fit a generalized linear model with family poisson to investigate whether there is evidence to suggest that the optimum price
+point may be different for travelers going to different destinations.  
+
+```{r}
+mod <- glm(price~destination + purchased, family=poisson(link="log"),data = travel)
+summary(mod)
+```
+This coefficient **purchesed** is highly significant (p < 2e-16). The negative coefficient for purchased indicates that as purchased increase, the mean offered price is smaller. i.e. either **10** or **5**.
+
+
